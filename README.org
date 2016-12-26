@@ -1,0 +1,7 @@
+* Platform
+
+A C++ toolkit with a 3D-rendering framework and network functions.
+
+It is designed to be a lightweight engine for networked games.
+
+Licensed under GNU Affero General Public License, see LICENSE file.

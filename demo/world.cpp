@@ -290,11 +290,10 @@ void World::Block::computeGradients(void)
 vec3 World::Block::computeGradient(const int3 &p)
 {
 	const int l = 0;
-	const float v = value(p);
-	return -vec3(
-		(v-value(int3(p.x-1,p.y,p.z),l))*0.5f + (value(int3(p.x+1,p.y,p.z),l)-v)*0.5f,
-		(v-value(int3(p.x,p.y-1,p.z),l))*0.5f + (value(int3(p.x,p.y+1,p.z),l)-v)*0.5f,
-		(v-value(int3(p.x,p.y,p.z-1),l))*0.5f + (value(int3(p.x,p.y,p.z+1),l)-v)*0.5f
+	return vec3(
+		(value(int3(p.x-1,p.y,p.z),l) - value(int3(p.x+1,p.y,p.z),l))*0.5f,
+		(value(int3(p.x,p.y-1,p.z),l) - value(int3(p.x,p.y+1,p.z),l))*0.5f,
+		(value(int3(p.x,p.y,p.z-1),l) - value(int3(p.x,p.y,p.z+1),l))*0.5f
 	);
 }
 

@@ -57,39 +57,38 @@ void Mesh::setIndices(const index_t *indices, size_t count)
 	}
 }
 
-void Mesh::setVertexAttrib(unsigned layout, const float *attribs, size_t count, int size)
+void Mesh::setVertexAttrib(unsigned layout, const float *attribs, size_t count, int size, bool normalize)
 {
-	Assert(attribs);
+	sptr<Attrib> attrib = getAttribBuffer<float>(layout);
+	attrib->size = size;
+	attrib->type = GL_FLOAT;
+	attrib->normalize = (normalize ? GL_TRUE : GL_FALSE);
+	attrib->fill(attribs, count);
 	
-	mAttribIntBuffers.erase(layout);
-	
-	Attrib &attrib = mAttribBuffers[layout];
-	attrib.size = size;
-	if(!attrib.buffer) 
-		attrib.buffer = std::make_shared<AttribBuffer>(new AttribBufferObject);
-	attrib.buffer->fill(attribs, count);
-
-	if(layout == 0)
-		computeRadius();
+	if(layout == 0) computeRadius();
 }
 
-void Mesh::setVertexAttrib(unsigned layout, const int *attribs, size_t count, int size)
+void Mesh::setVertexAttrib(unsigned layout, const int *attribs, size_t count, int size, bool normalize)
 {
-	Assert(attribs);
-	
-	mAttribBuffers.erase(layout);
-	
-	AttribInt &attrib = mAttribIntBuffers[layout];
-	attrib.size = size;
-	if(!attrib.buffer) 
-		attrib.buffer = std::make_shared<AttribIntBuffer>(new AttribBufferObject);
-	attrib.buffer->fill(attribs, count);
+	sptr<Attrib> attrib = getAttribBuffer<int>(layout);
+	attrib->size = size;
+	attrib->type = GL_INT;
+	attrib->normalize = (normalize ? GL_TRUE : GL_FALSE);
+	attrib->fill(attribs, count);
+}
+
+void Mesh::setVertexAttrib(unsigned layout, const char *attribs, size_t count, int size, bool normalize)
+{
+	sptr<Attrib> attrib = getAttribBuffer<char>(layout);
+	attrib->size = size;
+	attrib->type = GL_BYTE;
+	attrib->normalize = (normalize ? GL_TRUE : GL_FALSE);
+	attrib->fill(attribs, count);
 }
 
 void Mesh::unsetVertexAttrib(unsigned layout)
 {
 	mAttribBuffers.erase(layout);
-	mAttribIntBuffers.erase(layout);
 }
 
 size_t Mesh::indicesCount(void) const
@@ -100,14 +99,14 @@ size_t Mesh::indicesCount(void) const
 size_t Mesh::vertexAttribCount(unsigned layout) const
 {
 	auto it = mAttribBuffers.find(layout);
-	if(it != mAttribBuffers.end()) return it->second.buffer->count();
+	if(it != mAttribBuffers.end()) return it->second->count();
 	else return 0;
 }
 
 int Mesh::vertexAttribSize(unsigned layout) const
 {
 	auto it = mAttribBuffers.find(layout);
-	if(it != mAttribBuffers.end()) return it->second.size;
+	if(it != mAttribBuffers.end()) return it->second->size;
 	else return 0;
 }
 
@@ -117,9 +116,11 @@ void Mesh::optimize(unsigned layout)
 	if(it == mAttribBuffers.end()) 
 		return;
 	
-	Assert(it->second.size == 3);
-	sptr<AttribBuffer> vertexBuffer = it->second.buffer;
-	const float *vertices = vertexBuffer->lock(0, vertexBuffer->count(), GL_READ_ONLY);
+	sptr<Attrib> vertexBuffer = it->second;
+	Assert(vertexBuffer->size == 3);
+	Assert(vertexBuffer->type == GL_FLOAT);
+	
+	const float *vertices = reinterpret_cast<float*>(vertexBuffer->lock(0, vertexBuffer->count(), GL_READ_ONLY));
 	index_t *indices = mIndexBuffer->lock(0, mIndexBuffer->count(),GL_READ_WRITE);
 	
 	index_t newverticesindex = 0;
@@ -154,9 +155,11 @@ void Mesh::computeNormals(unsigned normalLayout, unsigned layout)
 		return;
 	}
 	
-	Assert(it->second.size == 3);
-	sptr<AttribBuffer> vertexBuffer = it->second.buffer;
-	const float *vertices = vertexBuffer->lock(0, vertexBuffer->count(), GL_READ_ONLY);
+	sptr<Attrib> vertexBuffer = it->second;
+	Assert(vertexBuffer->size == 3);
+	Assert(vertexBuffer->type == GL_FLOAT);
+	
+	const float *vertices = reinterpret_cast<float*>(vertexBuffer->lock(0, vertexBuffer->count(), GL_READ_ONLY));
 	const index_t *indices = mIndexBuffer->lock(0, mIndexBuffer->count(), GL_READ_ONLY);
 	
 	float *normals = new float[vertexBuffer->count()];
@@ -199,9 +202,11 @@ float Mesh::computeRadius(void)
 		return 0.f;
 	}
 	
-	Assert(it->second.size == 3);
-	sptr<AttribBuffer> vertexBuffer = it->second.buffer;
-	const float *vertices = vertexBuffer->lock(0, vertexBuffer->count(), GL_READ_ONLY);
+	sptr<Attrib> vertexBuffer = it->second;
+	Assert(vertexBuffer->size == 3);
+	Assert(vertexBuffer->type == GL_FLOAT);
+	
+	const float *vertices = reinterpret_cast<float*>(vertexBuffer->lock(0, vertexBuffer->count(), GL_READ_ONLY));
 	
 	float radius2 = 0.f;
 	for(index_t i=0; i<vertexBuffer->count(); i+=3)
@@ -252,9 +257,9 @@ float Mesh::intersect(const vec3 &pos, const vec3 &move, float radius, vec3 *int
 	if(it == mAttribBuffers.end()) 
 		return std::numeric_limits<float>::infinity();
 	
-	Assert(it->second.size == 3);
-	sptr<AttribBuffer> vertexBuffer = it->second.buffer;
-	const float *vertices = vertexBuffer->lock(0, vertexBuffer->count(), GL_READ_ONLY);
+	Assert(it->second->size == 3);
+	Assert(it->second->type == GL_FLOAT);
+	const float *vertices = reinterpret_cast<float*>(it->second->lock(0, it->second->count(), GL_READ_ONLY));
 	const index_t *indices = mIndexBuffer->lock(0, mIndexBuffer->count(), GL_READ_ONLY);
 
 	float nearest = std::numeric_limits<float>::infinity();
@@ -273,7 +278,7 @@ float Mesh::intersect(const vec3 &pos, const vec3 &move, float radius, vec3 *int
 		}
 	}
 	
-	vertexBuffer->unlock();
+	it->second->unlock();
 	mIndexBuffer->unlock();
 	
 	if(intersection) *intersection = nearestintersection;
@@ -287,36 +292,18 @@ void Mesh::enableBuffers(void) const
 		unsigned layout = p.first;
 		glEnableVertexAttribArray(layout);
 		glVertexAttribPointer(
-			layout,		// layout
-			p.second.size,	// size
-			GL_FLOAT,	// type
-			GL_FALSE,	// normalize
-			0,		// stride
-			p.second.buffer->bind());
-	}
-	
-	for(auto &p : mAttribIntBuffers)
-	{
-		unsigned layout = p.first;
-		glEnableVertexAttribArray(layout);
-		glVertexAttribIPointer(
-			layout,		// layout
-			p.second.size,	// size
-			GL_INT,		// type
-			0,		// stride
-			p.second.buffer->bind());
+			layout,			// layout
+			p.second->size,		// size
+			p.second->type,		// type
+			p.second->normalize,	// normalize
+			0,			// stride
+			p.second->bind());
 	}
 }
 
 void Mesh::disableBuffers(void) const
 {
 	for(auto &p : mAttribBuffers)
-	{
-		unsigned layout = p.first;
-		glDisableVertexAttribArray(layout);
-	}
-	
-	for(auto &p : mAttribIntBuffers)
 	{
 		unsigned layout = p.first;
 		glDisableVertexAttribArray(layout);

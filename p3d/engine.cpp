@@ -127,6 +127,12 @@ void Engine::getWindowSize(int *width, int *height) const
 	SDL_GetWindowSize(mWindow, width, height);
 }
 
+void Engine::clear(const vec4 &color)
+{
+	glClearColor(color.x, color.y, color.z, color.w);
+	glClear(GL_COLOR_BUFFER_BIT);
+}
+
 void Engine::setCursor(bool visible)
 {
 	if(visible) 
@@ -318,8 +324,7 @@ int Engine::display(void)
 {
 	if(mStates.empty()) return 0;
 	
-	glClearColor(0.f, 0.f, 0.f, 1.f);
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
+	glClear(GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
 	
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);

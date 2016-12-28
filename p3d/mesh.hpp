@@ -45,8 +45,9 @@ public:
 	virtual ~Mesh(void);
 	
 	void setIndices(const index_t *indices, size_t count = 0);
-	void setVertexAttrib(unsigned layout, const float *attribs, size_t count = 0, int size = 3);
-	void setVertexAttrib(unsigned layout, const int *attribs, size_t count = 0, int size = 1);
+	void setVertexAttrib(unsigned layout, const float *attribs, size_t count = 0, int size = 3, bool normalize = false);
+	void setVertexAttrib(unsigned layout, const int *attribs, size_t count = 0, int size = 1, bool normalize = false);
+	void setVertexAttrib(unsigned layout, const char *attribs, size_t count = 0, int size = 1, bool normalize = false);
 	void unsetVertexAttrib(unsigned layout);
 	
 	size_t indicesCount(void) const;
@@ -68,27 +69,70 @@ protected:
 	void enableBuffers(void) const;
 	void disableBuffers(void) const;
 
-	typedef Buffer<index_t>		IndexBuffer;
-	typedef Buffer<float>		AttribBuffer;
-	typedef Buffer<int>		AttribIntBuffer;
+	typedef Buffer<index_t> IndexBuffer;
 	
-	struct Attrib
+	class Attrib
 	{
-		sptr<AttribBuffer> buffer;
+	public:
 		int size = 3;
+		GLenum type = GL_FLOAT;
+		GLboolean normalize = GL_FALSE;
+		
+		virtual size_t count(void) const = 0;
+		virtual void fill(const void *attribsq, size_t count) = 0;
+		virtual void *bind(void) = 0;
+		virtual void *lock(size_t offset, size_t size, GLenum access=GL_READ_ONLY) = 0;
+		virtual void unlock(void) = 0;
 	};
 	
-	struct AttribInt // Not templatable because OpenGL calls are different
+	template<typename T>
+	class TypedAttrib : public Attrib
 	{
-		sptr<AttribIntBuffer> buffer;
-		int size = 1;
+	public:
+		typedef Buffer<T> AttribBuffer;
+		sptr<AttribBuffer> buffer;
+		
+		size_t count(void) const
+		{
+			return buffer->count();
+		}
+		
+		void fill(const void *attribs, size_t count)
+		{
+			if(!buffer) buffer = std::make_shared<AttribBuffer>(new AttribBufferObject);
+			buffer->fill(reinterpret_cast<const T*>(attribs), count);
+		}
+		
+		void *bind(void)
+		{
+			return buffer->bind();
+		}
+		
+		void *lock(size_t offset, size_t nbr, GLenum access=GL_READ_ONLY)
+		{
+			return buffer->lock(offset, nbr, access);
+		}
+		
+		void unlock(void)
+		{
+			buffer->unlock();
+		}
 	};
+	
+	template<typename T>
+	sptr<Attrib> getAttribBuffer(unsigned layout)
+	{
+		auto it = mAttribBuffers.find(layout);
+		if(it != mAttribBuffers.end()) return it->second;	
+		sptr<Attrib> attrib = std::make_shared<TypedAttrib<T> >();
+		mAttribBuffers[layout] = attrib;
+		return attrib;
+	}
 	
 	// Buffers
-	sptr<IndexBuffer>		mIndexBuffer;
-	std::map<unsigned, Attrib>	mAttribBuffers;
-	std::map<unsigned, AttribInt>	mAttribIntBuffers;
-
+	sptr<IndexBuffer>			mIndexBuffer;
+	std::map<unsigned, sptr<Attrib> >	mAttribBuffers;
+	
 	float mRadius = -1.f;
 };
 

@@ -126,6 +126,8 @@ int Game::onDraw(Engine *engine)
 {
 	int count = 0;
 	
+	engine->clear(vec4(0.f, 0.f, 0.f, 1.f));
+	
 	int width, height;
 	engine->getWindowSize(&width, &height);
 	

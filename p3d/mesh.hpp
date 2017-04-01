@@ -1,6 +1,6 @@
 /***************************************************************************
  *   Copyright (C) 2006-2010 by Paul-Louis Ageneau                         *
- *   paul-louis (at) ageneau (dot) org                               *
+ *   paul-louis (at) ageneau (dot) org                                     *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *

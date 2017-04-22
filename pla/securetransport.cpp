@@ -112,7 +112,7 @@ SecureTransport::~SecureTransport(void)
 	delete mStream;
 	delete mBuffer;
 
-	for(auto &c : mCredsToDelete)
+	for(auto c : mCredsToDelete)
 		delete c;
 }
 
@@ -130,12 +130,7 @@ void SecureTransport::setHandshakeTimeout(duration timeout)
 	if(!isHandshakeDone())
 	{
 		gnutls_handshake_set_timeout(mSession, std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count());
-
-		if(mStream->isDatagram())
-		{
-			const int factor = 10;
-			setDatagramTimeout(timeout, timeout/factor);
-		}
+		setDatagramTimeout(timeout, seconds(1.));
 	}
 }
 
@@ -148,9 +143,11 @@ void SecureTransport::setDatagramMtu(unsigned int mtu)
 void SecureTransport::setDatagramTimeout(duration timeout, duration retransTimeout)
 {
 	if(mStream->isDatagram())
+	{
 		gnutls_dtls_set_timeouts(mSession,
 			std::chrono::duration_cast<std::chrono::milliseconds>(retransTimeout).count(),
 			std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count());
+	}
 }
 
 void SecureTransport::handshake(void)
@@ -384,13 +381,14 @@ ssize_t SecureTransport::WriteCallback(gnutls_transport_ptr_t ptr, const void* d
 	catch(const Timeout &timeout)
 	{
 		LogDebug("SecureTransport::WriteCallback", "Timeout");
+		gnutls_transport_set_errno(st->mSession, ETIMEDOUT);
 	}
 	catch(const std::exception &e)
 	{
 		LogDebug("SecureTransport::WriteCallback", e.what());
+		gnutls_transport_set_errno(st->mSession, ECONNRESET);
 	}
 
-	gnutls_transport_set_errno(st->mSession, ECONNRESET);
 	return -1;
 }
 
@@ -411,13 +409,14 @@ ssize_t SecureTransport::ReadCallback(gnutls_transport_ptr_t ptr, void* data, si
 	catch(const Timeout &timeout)
 	{
 		LogDebug("SecureTransport::ReadCallback", "Timeout");
+		gnutls_transport_set_errno(st->mSession, ETIMEDOUT);
 	}
 	catch(const std::exception &e)
 	{
 		LogDebug("SecureTransport::ReadCallback", e.what());
+		gnutls_transport_set_errno(st->mSession, ECONNRESET);
 	}
 
-	gnutls_transport_set_errno(st->mSession, ECONNRESET);
 	return -1;
 }
 
@@ -432,9 +431,9 @@ int SecureTransport::TimeoutCallback(gnutls_transport_ptr_t ptr, unsigned int ms
 	catch(const std::exception &e)
 	{
 		LogDebug("SecureTransport::TimeoutCallback", e.what());
+		gnutls_transport_set_errno(st->mSession, ECONNRESET);
 	}
 
-	gnutls_transport_set_errno(st->mSession, ECONNRESET);
 	return -1;
 }
 
@@ -612,8 +611,8 @@ String SecureTransport::ErrorString(int code)
 {
 	switch(code)
 	{
-		case GNUTLS_E_PULL_ERROR: return "Reading failed";
-		case GNUTLS_E_PUSH_ERROR: return "Writing failed";
+		case GNUTLS_E_PULL_ERROR: return "Connection failed";
+		case GNUTLS_E_PUSH_ERROR: return "Connection failed";
 		default: return gnutls_strerror(code);
 	}
 }

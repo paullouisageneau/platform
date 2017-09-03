@@ -1,5 +1,5 @@
 /*************************************************************************
- *   Copyright (C) 2011-2014 by Paul-Louis Ageneau                       *
+ *   Copyright (C) 2011-2017 by Paul-Louis Ageneau                       *
  *   paul-louis (at) ageneau (dot) org                                   *
  *                                                                       *
  *   This file is part of Plateform.                                     *
@@ -29,6 +29,7 @@
 
 #include <nettle/sha1.h>
 #include <nettle/sha2.h>
+#include <nettle/sha3.h>
 #include <nettle/aes.h>
 #include <nettle/ctr.h>
 #include <nettle/gcm.h>
@@ -38,6 +39,8 @@
 
 namespace pla
 {
+
+class Rsa;
 
 // Hash function interface
 class Hash
@@ -63,9 +66,16 @@ public:
 	int64_t compute(Stream &stream, int64_t max, BinaryString &digest);
 	BinaryString compute(const BinaryString &str);
 
-	// HMAC
-	virtual void hmac(const char *message, size_t len, const char *key, size_t key_len, char *digest) = 0;
-	virtual void hmac(const BinaryString &message, const BinaryString &key, BinaryString &digest) = 0;
+	// MAC
+	virtual void mac(const char *message, size_t len, const char *key, size_t key_len, char *digest) = 0;
+	virtual void mac(const BinaryString &message, const BinaryString &key, BinaryString &digest) = 0;
+
+private:
+	// RSA signature
+	virtual bool rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature);
+	virtual bool rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature);
+
+	friend class Rsa;
 };
 
 // SHA1 hash function implementation
@@ -79,14 +89,18 @@ public:
 	void finalize(char *digest);
 	void finalize(BinaryString &digest);
 
-	void hmac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
-	void hmac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
+	// HMAC-SHA1
+	void mac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
+	void mac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
 
 	// PBKDF2-HMAC-SHA1
-	void pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations);
-	void pbkdf2_hmac(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations);
+	void pbkdf2(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations);
+	void pbkdf2(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations);
 
 private:
+	bool rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature);
+	bool rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature);
+
 	struct sha1_ctx mCtx;
 };
 
@@ -101,14 +115,18 @@ public:
 	void finalize(char *digest);
 	void finalize(BinaryString &digest);
 
-	void hmac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
-	void hmac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
+	// HMAC-SHA256
+	void mac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
+	void mac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
 
 	// PBKDF2-HMAC-SHA256
-	void pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations);
-	void pbkdf2_hmac(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations);
+	void pbkdf2(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations);
+	void pbkdf2(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations);
 
 private:
+	bool rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature);
+	bool rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature);
+
 	struct sha256_ctx mCtx;
 };
 
@@ -123,16 +141,75 @@ public:
 	void finalize(char *digest);
 	void finalize(BinaryString &digest);
 
-	void hmac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
-	void hmac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
+	// HMAC-SHA512
+	void mac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
+	void mac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
 
-	// PBKDF2-HMAC-SHA256
-	void pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations);
-	void pbkdf2_hmac(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations);
+	// PBKDF2-HMAC-SHA512
+	void pbkdf2(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations);
+	void pbkdf2(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations);
 
 private:
+	bool rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature);
+	bool rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature);
+
 	struct sha512_ctx mCtx;
 };
+
+typedef Sha256 Sha2;	// SHA2 defaults to SHA256
+
+// SHA3-256 hash function implementation
+class Sha3_256 : public Hash
+{
+public:
+	size_t length(void) const;
+	void init(void);
+	void process(const char *data, size_t size);
+	void process(const BinaryString &str);
+	void finalize(char *digest);
+	void finalize(BinaryString &digest);
+
+	// "Unlike SHA1 and SHA2, Keccak does not have the length-extension weakness,
+	// hence does not need the HMAC nested construction. Instead, MAC computation
+	// can be performed by simply prepending the message with the key."
+	// This is exactly what this function does. It's not standard!
+	void mac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
+	void mac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
+
+	// TODO: SHAKE and KMAC implementation
+
+private:
+	// TODO: SHA3 signatures
+	//bool rsaVerify(const BinaryString &digest, struct rsa_public_key *key, const mpz_t signature);
+	//bool rsaSign(const BinaryString &digest, struct rsa_private_key *key, mpz_t signature);
+
+	struct sha3_256_ctx mCtx;
+};
+
+// SHA3-512 hash function implementation
+class Sha3_512 : public Hash
+{
+public:
+	size_t length(void) const;
+	void init(void);
+	void process(const char *data, size_t size);
+	void process(const BinaryString &str);
+	void finalize(char *digest);
+	void finalize(BinaryString &digest);
+
+	// See Sha3_256::mac()
+	void mac(const char *message, size_t len, const char *key, size_t key_len, char *digest);
+	void mac(const BinaryString &message, const BinaryString &key, BinaryString &digest);
+
+private:
+	// TODO: SHA3 signatures
+	//bool rsaVerify(const BinaryString &digest, struct rsa_public_key *key, const mpz_t signature);
+	//bool rsaSign(const BinaryString &digest, struct rsa_private_key *key, mpz_t signature);
+
+	struct sha3_512_ctx mCtx;
+};
+
+typedef Sha3_256 Sha3;	// SHA3 defaults to SHA3-256
 
 class Cipher : public Stream
 {
@@ -225,8 +302,16 @@ public:
 
 		bool isNull(void) const;
 		void clear(void);
-		const BinaryString &digest(void) const;
-		bool verify(const BinaryString &digest, const BinaryString &signature) const;
+
+		// Fingerprint
+		BinaryString fingerprint(Hash &hash) const;
+		template<class H> BinaryString fingerprint(void) const
+			{ H hash; return fingerprint(hash); }
+
+		// Verification
+		bool verify(Hash &hash, const BinaryString &digest, const BinaryString &signature) const;
+		template<class H> bool verify(const BinaryString &digest, const BinaryString &signature) const
+			{ H hash; return verify(hash, digest, signature); }
 
 		// Serializable
 		void serialize(Serializer &s) const;
@@ -236,8 +321,9 @@ public:
 		bool isInlineSerializable(void) const;
 
 	private:
+		void derEncode(Stream &out) const;	// used only to compute digest/fingerprint
+
 		struct rsa_public_key mKey;
-		mutable BinaryString mDigest;
 		friend class Rsa;
 	};
 
@@ -251,7 +337,11 @@ public:
 
 		bool isNull(void) const;
 		void clear(void);
-		void sign(const BinaryString &digest, BinaryString &signature) const;
+
+		// Signature
+		void sign(Hash &hash, const BinaryString &digest, BinaryString &signature) const;
+		template<class H> void sign(const BinaryString &digest, BinaryString &signature) const
+			{ H hash; sign(hash, digest, signature); }
 
 		// Serializable
 		void serialize(Serializer &s) const;
@@ -277,7 +367,29 @@ private:
 	unsigned mBits;
 };
 
+// Argon2 key derivation function for password hashing
+class Argon2
+{
+public:
+	static unsigned DefaultTimeCost;
+	static unsigned DefaultMemoryCost;
+	static unsigned DefaultParallelism;
+
+	Argon2(void);
+	Argon2(unsigned tcost, unsigned mcost, unsigned parallelism);
+	~Argon2(void);
+
+	void compute(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len);
+	void compute(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len);
+
+private:
+	unsigned mTimeCost;
+	unsigned mMemoryCost;
+	unsigned mParallelism;
+};
+
 // Add-on functions for custom mpz import/export
+size_t mpz_size_binary(const mpz_t n);
 void mpz_import_binary(mpz_t n, const BinaryString &bs);
 void mpz_export_binary(const mpz_t n, BinaryString &bs);
 void mpz_import_string(mpz_t n, const String &str);

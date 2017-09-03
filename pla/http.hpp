@@ -63,13 +63,13 @@ public:
 		Map<String, TempFile*> files;	// Files posted with POST
 		Address remoteAddress;			// Remote address, set by Server
 
-		String fullUrl;		// URL with parameters, used only by recv
+		String fullUrl;		// URL with parameters
 		Stream *stream;		// Internal use for Response construction
 	};
 
 	struct Response
 	{
-		Response(void);
+		Response(int code = 200);
 		Response(const Request &request, int code = 200);
 
 		void send(void);

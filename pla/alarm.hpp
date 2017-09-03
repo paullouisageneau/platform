@@ -62,6 +62,8 @@ public:
 	void cancel(void);
 	void join(void);
 
+	bool isScheduled(void) const;
+
 private:
 	static Scheduler scheduler;
 
@@ -77,9 +79,8 @@ inline Alarm::Alarm(void) : joining(false)
 
 inline Alarm::~Alarm(void)
 {
-	joining = true;
 	cancel();
-	join();
+	// No join to allow alarm autodeletion
 }
 
 template<class F, class... Args>
@@ -115,7 +116,7 @@ auto Alarm::schedule(time_point time, F&& f, Args&&... args)
 	auto task = std::make_shared<std::packaged_task<type()> >(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 	std::future<type> result = task->get_future();
 
-	if(joining) throw std::runtime_error("schedule on joiningped Alarm");
+	if(joining) throw std::runtime_error("schedule on closing Alarm");
 	scheduler.schedule(taskid, time, function = [task]()
 	{
 		(*task)();
@@ -152,6 +153,11 @@ inline void Alarm::join(void)
 {
 	joining = true;
 	scheduler.wait(taskid);
+}
+
+inline bool Alarm::isScheduled(void) const
+{
+	return scheduler.isScheduled(taskid);
 }
 
 }

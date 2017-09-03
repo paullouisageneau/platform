@@ -1,5 +1,5 @@
 /*************************************************************************
- *   Copyright (C) 2011-2014 by Paul-Louis Ageneau                       *
+ *   Copyright (C) 2011-2017 by Paul-Louis Ageneau                       *
  *   paul-louis (at) ageneau (dot) org                                   *
  *                                                                       *
  *   This file is part of Plateform.                                     *
@@ -28,6 +28,16 @@
 #include <nettle/hmac.h>
 #include <nettle/pbkdf2.h>
 #include <gmp.h>
+
+#ifdef WINDOWS
+#include "win32/argon2.h"
+#else
+#include <argon2.h>
+#endif
+
+#ifdef pbkdf2
+#undef pbkdf2
+#endif
 
 namespace pla
 {
@@ -98,6 +108,16 @@ BinaryString Hash::compute(const BinaryString &str)
 	return result;
 }
 
+bool Hash::rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature)
+{
+	throw Unsupported("Unable to use the specified hash for RSA verification");
+}
+
+bool Hash::rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature)
+{
+	throw Unsupported("Unable to use the specified hash for RSA signature");
+}
+
 size_t Sha1::length(void) const
 {
 	return size_t(SHA1_DIGEST_SIZE);
@@ -129,7 +149,7 @@ void Sha1::finalize(BinaryString &digest)
 	finalize(digest.ptr());
 }
 
-void Sha1::hmac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
+void Sha1::mac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
 {
 	struct hmac_sha1_ctx ctx;
 	hmac_sha1_set_key(&ctx, key_len, reinterpret_cast<const uint8_t*>(key));
@@ -137,13 +157,13 @@ void Sha1::hmac(const char *message, size_t len, const char *key, size_t key_len
 	hmac_sha1_digest(&ctx, length(), reinterpret_cast<uint8_t*>(digest));
 }
 
-void Sha1::hmac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
+void Sha1::mac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
 {
 	digest.resize(length());
-	hmac(message.data(), message.size(), key.data(), key.size(), digest.ptr());
+	mac(message.data(), message.size(), key.data(), key.size(), digest.ptr());
 }
 
-void Sha1::pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations)
+void Sha1::pbkdf2(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations)
 {
 	Assert(iterations != 0);
 	pbkdf2_hmac_sha1(len, reinterpret_cast<const uint8_t*>(secret),
@@ -152,10 +172,22 @@ void Sha1::pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_t 
 				key_len, reinterpret_cast<uint8_t*>(key));
 }
 
-void Sha1::pbkdf2_hmac(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations)
+void Sha1::pbkdf2(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations)
 {
 	key.resize(key_len);
-	pbkdf2_hmac(secret.data(), secret.size(), salt.data(), salt.size(), key.ptr(), key.size(), iterations);
+	pbkdf2(secret.data(), secret.size(), salt.data(), salt.size(), key.ptr(), key.size(), iterations);
+}
+
+bool Sha1::rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature)
+{
+	if(digest.size() != length()) return false;
+	return rsa_sha1_verify_digest(key, digest.bytes(), signature) != 0;
+}
+
+bool Sha1::rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature)
+{
+	if(digest.size() != length()) return false;
+	return rsa_sha1_sign_digest(key, digest.bytes(), signature) != 0;
 }
 
 size_t Sha256::length(void) const
@@ -189,7 +221,7 @@ void Sha256::finalize(BinaryString &digest)
 	finalize(digest.ptr());
 }
 
-void Sha256::hmac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
+void Sha256::mac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
 {
 	struct hmac_sha256_ctx ctx;
 	hmac_sha256_set_key(&ctx, key_len, reinterpret_cast<const uint8_t*>(key));
@@ -197,13 +229,13 @@ void Sha256::hmac(const char *message, size_t len, const char *key, size_t key_l
 	hmac_sha256_digest(&ctx, length(), reinterpret_cast<uint8_t*>(digest));
 }
 
-void Sha256::hmac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
+void Sha256::mac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
 {
 	digest.resize(length());
-	hmac(message.data(), message.size(), key.data(), key.size(), digest.ptr());
+	mac(message.data(), message.size(), key.data(), key.size(), digest.ptr());
 }
 
-void Sha256::pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations)
+void Sha256::pbkdf2(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations)
 {
 	Assert(iterations != 0);
 	pbkdf2_hmac_sha256(len, reinterpret_cast<const uint8_t*>(secret),
@@ -212,10 +244,22 @@ void Sha256::pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_
 				key_len, reinterpret_cast<uint8_t*>(key));
 }
 
-void Sha256::pbkdf2_hmac(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations)
+void Sha256::pbkdf2(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations)
 {
 	key.resize(key_len);
-	pbkdf2_hmac(secret.data(), secret.size(), salt.data(), salt.size(), key.ptr(), key.size(), iterations);
+	pbkdf2(secret.data(), secret.size(), salt.data(), salt.size(), key.ptr(), key.size(), iterations);
+}
+
+bool Sha256::rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature)
+{
+	if(digest.size() != length()) return false;
+	return rsa_sha256_verify_digest(key, digest.bytes(), signature) != 0;
+}
+
+bool Sha256::rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature)
+{
+	if(digest.size() != length()) return false;
+	return rsa_sha256_sign_digest(key, digest.bytes(), signature) != 0;
 }
 
 size_t Sha512::length(void) const
@@ -249,7 +293,7 @@ void Sha512::finalize(BinaryString &digest)
 	finalize(digest.ptr());
 }
 
-void Sha512::hmac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
+void Sha512::mac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
 {
 	struct hmac_sha512_ctx ctx;
 	hmac_sha512_set_key(&ctx, key_len, reinterpret_cast<const uint8_t*>(key));
@@ -257,33 +301,142 @@ void Sha512::hmac(const char *message, size_t len, const char *key, size_t key_l
 	hmac_sha512_digest(&ctx, length(), reinterpret_cast<uint8_t*>(digest));
 }
 
-void Sha512::hmac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
+void Sha512::mac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
 {
 	digest.resize(length());
-	hmac(message.data(), message.size(),
+	mac(message.data(), message.size(),
 		key.data(), key.size(),
 		digest.ptr());
 }
 
-void Sha512::pbkdf2_hmac(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations)
+void Sha512::pbkdf2(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len, unsigned iterations)
 {
 	Assert(iterations != 0);
 
 	struct hmac_sha512_ctx ctx;
 	hmac_sha512_set_key(&ctx, len, reinterpret_cast<const uint8_t*>(secret));
+	#define pbkdf2 nettle_pbkdf2	// fix name conflict with nettle
 	PBKDF2(&ctx, hmac_sha512_update, hmac_sha512_digest,
 		64, iterations,
 		salt_len, reinterpret_cast<const uint8_t*>(salt),
 		key_len, reinterpret_cast<uint8_t*>(key));
+	#undef pbkdf2
 }
 
-void Sha512::pbkdf2_hmac(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations)
+void Sha512::pbkdf2(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len, unsigned iterations)
 {
 	key.resize(key_len);
-	pbkdf2_hmac(secret.data(), secret.size(),
+	pbkdf2(secret.data(), secret.size(),
 		salt.data(), salt.size(),
 		key.ptr(), key.size(),
 		iterations);
+}
+
+
+bool Sha512::rsaVerify(const BinaryString &digest, const struct rsa_public_key *key, const mpz_t signature)
+{
+	if(digest.size() != length()) return false;
+	return rsa_sha512_verify_digest(key, digest.bytes(), signature) != 0;
+}
+
+bool Sha512::rsaSign(const BinaryString &digest, const struct rsa_private_key *key, mpz_t signature)
+{
+	if(digest.size() != length()) return false;
+	return rsa_sha512_sign_digest(key, digest.bytes(), signature) != 0;
+}
+
+size_t Sha3_256::length(void) const
+{
+	return size_t(SHA3_256_DIGEST_SIZE);
+}
+
+void Sha3_256::init(void)
+{
+	sha3_256_init(&mCtx);
+}
+
+void Sha3_256::process(const char *data, size_t size)
+{
+	sha3_256_update(&mCtx, unsigned(size), reinterpret_cast<const uint8_t*>(data));
+}
+
+void Sha3_256::process(const BinaryString &str)
+{
+	process(str.data(), str.size());
+}
+
+void Sha3_256::finalize(char *digest)
+{
+	sha3_256_digest(&mCtx, unsigned(length()), reinterpret_cast<uint8_t*>(digest));
+}
+
+void Sha3_256::finalize(BinaryString &digest)
+{
+	digest.resize(length());
+	finalize(digest.ptr());
+}
+
+void Sha3_256::mac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
+{
+	init();
+	process(key, key_len);	// key first
+	process(message, len);
+	finalize(digest);
+}
+
+void Sha3_256::mac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
+{
+	digest.resize(length());
+	mac(message.data(), message.size(),
+		key.data(), key.size(),
+		digest.ptr());
+}
+
+size_t Sha3_512::length(void) const
+{
+	return size_t(SHA3_256_DIGEST_SIZE);
+}
+
+void Sha3_512::init(void)
+{
+	sha3_512_init(&mCtx);
+}
+
+void Sha3_512::process(const char *data, size_t size)
+{
+	sha3_512_update(&mCtx, unsigned(size), reinterpret_cast<const uint8_t*>(data));
+}
+
+void Sha3_512::process(const BinaryString &str)
+{
+	process(str.data(), str.size());
+}
+
+void Sha3_512::finalize(char *digest)
+{
+	sha3_512_digest(&mCtx, unsigned(length()), reinterpret_cast<uint8_t*>(digest));
+}
+
+void Sha3_512::finalize(BinaryString &digest)
+{
+	digest.resize(length());
+	finalize(digest.ptr());
+}
+
+void Sha3_512::mac(const char *message, size_t len, const char *key, size_t key_len, char *digest)
+{
+	init();
+	process(key, key_len);	// key first
+	process(message, len);
+	finalize(digest);
+}
+
+void Sha3_512::mac(const BinaryString &message, const BinaryString &key, BinaryString &digest)
+{
+	digest.resize(length());
+	mac(message.data(), message.size(),
+		key.data(), key.size(),
+		digest.ptr());
 }
 
 Cipher::Cipher(Stream *stream, bool mustDelete) :
@@ -301,8 +454,8 @@ Cipher::Cipher(Stream *stream, bool mustDelete) :
 
 Cipher::~Cipher(void)
 {
-	delete mReadBlock;
-	delete mWriteBlock;
+	delete[] mReadBlock;
+	delete[] mWriteBlock;
 
 	if(mMustDelete)
 		delete mStream;
@@ -538,7 +691,6 @@ Rsa::PublicKey &Rsa::PublicKey::operator=(const Rsa::PublicKey &key)
 	mKey.size = key.mKey.size;
 	mpz_set(mKey.n, key.mKey.n);
 	mpz_set(mKey.e, key.mKey.e);
-	mDigest = key.mDigest;
 	return *this;
 }
 
@@ -557,41 +709,27 @@ void Rsa::PublicKey::clear(void)
 	rsa_public_key_clear(&mKey);
 	rsa_public_key_init(&mKey);
 	mKey.size = 0;
-
-	mDigest.clear();
 }
 
-const BinaryString &Rsa::PublicKey::digest(void) const
+BinaryString Rsa::PublicKey::fingerprint(Hash &hash) const
 {
-	if(mDigest.empty() && !isNull())
-	{
-		BinaryString tmp;
-		BinarySerializer serializer(&tmp);
-		serialize(serializer);
-		Sha256().compute(tmp, mDigest);
-	}
-
-	return mDigest;
+	BinaryString der, digest;
+	derEncode(der);
+	hash.compute(der, digest);
+	return digest;
 }
 
-bool Rsa::PublicKey::verify(const BinaryString &digest, const BinaryString &signature) const
+bool Rsa::PublicKey::verify(Hash &hash, const BinaryString &digest, const BinaryString &signature) const
 {
 	if(digest.empty())
 		throw Exception("Empty digest used for RSA verification");
 
 	mpz_t s;
 	mpz_init(s);
-
-	int ret = 0;
+	bool success = false;
 	try {
 		mpz_import_binary(s, signature);
-
-		switch(digest.size()*8)
-		{
-			case 256: ret = rsa_sha256_verify_digest(&mKey, digest.bytes(), s); break;
-			case 512: ret = rsa_sha512_verify_digest(&mKey, digest.bytes(), s); break;
-			default: throw Exception("Incompatible digest used for RSA signature"); break;
-		}
+		success = hash.rsaVerify(digest, &mKey, s);
 	}
 	catch(...)
 	{
@@ -600,7 +738,7 @@ bool Rsa::PublicKey::verify(const BinaryString &digest, const BinaryString &sign
 	}
 
 	mpz_clear(s);
-	return (ret != 0);
+	return success;
 }
 
 void Rsa::PublicKey::serialize(Serializer &s) const
@@ -670,6 +808,32 @@ bool Rsa::PublicKey::isInlineSerializable(void) const
 	return true;
 }
 
+void Rsa::PublicKey::derEncode(Stream &out) const
+{
+	if(isNull()) throw InvalidData("DER encode called on null RSA public key");
+
+	BinaryString e, n;
+	mpz_export_binary(mKey.e, e);
+	mpz_export_binary(mKey.n, n);
+	Assert(e.size() <= 127);
+	Assert(n.size() > 127 && n.size() <= 65535);
+
+	unsigned length = 2 + 2 + n.size() + 2 + e.size();
+
+	out.write(uint8_t(0x30));				// SEQUENCE
+	out.write(uint8_t(0x80) & uint8_t(2));	// long length (2 bytes)
+	out.write(uint16_t(length));			// 2 bytes length
+
+	out.write(uint8_t(0x02));				// INTEGER
+	out.write(uint8_t(0x80) & uint8_t(2));	// long length (2 bytes)
+	out.write(uint16_t(n.size()));			// 2 bytes length
+	out.write(n);							// value
+
+	out.write(uint8_t(0x02));				// INTEGER
+	out.write(uint8_t(e.size()));			// short length
+	out.write(e);							// value
+}
+
 Rsa::PrivateKey::PrivateKey(void)
 {
 	rsa_private_key_init(&mKey);
@@ -713,7 +877,7 @@ void Rsa::PrivateKey::clear(void)
 	mKey.size = 0;
 }
 
-void Rsa::PrivateKey::sign(const BinaryString &digest, BinaryString &signature) const
+void Rsa::PrivateKey::sign(Hash &hash, const BinaryString &digest, BinaryString &signature) const
 {
 	if(digest.empty())
 		throw Exception("Empty digest used for RSA signature");
@@ -722,16 +886,8 @@ void Rsa::PrivateKey::sign(const BinaryString &digest, BinaryString &signature) 
 	mpz_init(s);
 
 	try {
-		int ret;
-		switch(digest.size()*8)
-		{
-			case 256: ret = rsa_sha256_sign_digest(&mKey, digest.bytes(), s); break;
-			case 512: ret = rsa_sha512_sign_digest(&mKey, digest.bytes(), s); break;
-			default: throw Exception("Incompatible digest used for RSA signature"); break;
-		}
-
-		if(!ret) throw Exception("RSA signature failed");
-
+		bool success = hash.rsaSign(digest, &mKey, s);
+		if(!success) throw Exception("RSA signature failed");
 		mpz_export_binary(s, signature);
 	}
 	catch(...)
@@ -897,6 +1053,49 @@ void Rsa::SignCertificate(gnutls_x509_crt_t crt, gnutls_x509_crt_t issuer, gnutl
 		throw Exception(String("Unable to sign X509 certificate: ") + gnutls_strerror(ret));
 }
 
+unsigned Argon2::DefaultTimeCost = 3;				// 3 pass
+unsigned Argon2::DefaultMemoryCost = 1<<16; // 64 MiB
+unsigned Argon2::DefaultParallelism = 2;		// 2 threads
+
+Argon2::Argon2(void) :
+	mTimeCost(DefaultTimeCost),
+	mMemoryCost(DefaultMemoryCost),
+	mParallelism(DefaultParallelism)
+{
+
+}
+
+Argon2::Argon2(unsigned tcost, unsigned mcost, unsigned parallelism) :
+	mTimeCost(tcost),
+	mMemoryCost(mcost),
+	mParallelism(parallelism)
+{
+
+}
+
+Argon2::~Argon2(void)
+{
+
+}
+
+void Argon2::compute(const char *secret, size_t len, const char *salt, size_t salt_len, char *key, size_t key_len)
+{
+	if(argon2i_hash_raw(uint32_t(mTimeCost), uint32_t(mMemoryCost), uint32_t(mParallelism),
+		secret, len, salt, salt_len, key, key_len) != ARGON2_OK)
+		throw Exception("Argon2 password hashing failed");
+}
+
+void Argon2::compute(const BinaryString &secret, const BinaryString &salt, BinaryString &key, size_t key_len)
+{
+	key.resize(key_len);
+	compute(secret.data(), secret.size(), salt.data(), salt.size(), key.ptr(), key.size());
+}
+
+size_t mpz_size_binary(const mpz_t n)
+{
+	return (mpz_sizeinbase(n, 2) + 7) / 8;
+}
+
 void mpz_import_binary(mpz_t n, const BinaryString &bs)
 {
 	mpz_import(n, bs.size(), 1, 1, 1, 0, bs.ptr());	// big endian
@@ -904,7 +1103,7 @@ void mpz_import_binary(mpz_t n, const BinaryString &bs)
 
 void mpz_export_binary(const mpz_t n, BinaryString &bs)
 {
-	size_t size = (mpz_sizeinbase(n, 2) + 7) / 8;
+	size_t size = mpz_size_binary(n);
 	bs.resize(size);
 
 	size_t len = 0;

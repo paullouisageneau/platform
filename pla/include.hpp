@@ -24,10 +24,14 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 	#define WINDOWS
-	#define _WIN32_WINNT 0x0501
-	#define __MSVCRT_VERSION__ 0x0601
 	#ifdef __MINGW32__
 		#define MINGW
+	#endif
+	#ifndef _WIN32_WINNT
+		#define _WIN32_WINNT 0x0501
+	#endif
+	#ifndef __MSVCRT_VERSION__
+		#define __MSVCRT_VERSION__ 0x0601
 	#endif
 	#define NO_IFADDRS
 #endif
@@ -147,7 +151,6 @@ typedef int ctl_t;
 #define SEADDRINUSE	EADDRINUSE
 #define INVALID_SOCKET -1
 #define SOCK_TO_INT(x) (x)
-
 #define mkdirmod(d,m) mkdir(d,m)
 
 #endif
@@ -168,17 +171,21 @@ typedef int ctl_t;
 #define AI_ADDRCONFIG 0
 #endif
 
+#ifndef LINUX
+#define MSG_NOSIGNAL 0
+#endif
+
 namespace pla
 {
 
 #ifdef WINDOWS
-typedef signed char		int8_t;		// 8 bits
-typedef signed short		int16_t;	// 16 bits
-typedef signed int		int32_t;	// 32 bits
-typedef signed long long	int64_t;	// 64 bits
-typedef unsigned char		uint8_t;	// 8 bits
-typedef unsigned short		uint16_t;	// 16 bits
-typedef unsigned int		uint32_t;	// 32 bits
+typedef signed char					int8_t;		// 8 bits
+typedef signed short				int16_t;	// 16 bits
+typedef signed int					int32_t;	// 32 bits
+typedef signed long long		int64_t;	// 64 bits
+typedef unsigned char				uint8_t;	// 8 bits
+typedef unsigned short			uint16_t;	// 16 bits
+typedef unsigned int				uint32_t;	// 32 bits
 typedef unsigned long long	uint64_t;	// 64 bits
 
 typedef struct __stat64 stat_t;
@@ -191,9 +198,9 @@ typedef ::int16_t		int16_t;	// 16 bits
 typedef ::int32_t		int32_t;	// 32 bits
 typedef ::int64_t		int64_t;	// 64 bits
 typedef ::uint8_t		uint8_t;	// 8 bits
-typedef ::uint16_t		uint16_t;	// 16 bits
-typedef ::uint32_t		uint32_t;	// 32 bits
-typedef ::uint64_t		uint64_t;	// 64 bits
+typedef ::uint16_t	uint16_t;	// 16 bits
+typedef ::uint32_t	uint32_t;	// 32 bits
+typedef ::uint64_t	uint64_t;	// 64 bits
 
 #ifdef MACOSX
 typedef struct stat stat_t;
@@ -205,9 +212,9 @@ inline int stat(const char *path, stat_t *buf) { return ::stat64(path,buf); }
 
 #endif
 
-typedef unsigned char		byte;
-typedef float			float32_t;	// 32 bits float
-typedef double			float64_t;	// 64 bits float
+typedef unsigned char	byte;
+typedef float		float32_t;	// 32 bits float
+typedef double	float64_t;	// 64 bits float
 
 #define CONST64(n) n ## ULL	// 64 bits unsigned constant
 
@@ -225,8 +232,8 @@ typedef std::chrono::duration<double, std::nano>  nanoseconds;
 // Utility functions
 template<typename T> T bounds(T val, T val_min, T val_max)
 {
-    if(val_min > val_max) std::swap(val_min,val_max);
-    return std::min(val_max,std::max(val_min,val));
+	if(val_min > val_max) std::swap(val_min,val_max);
+	return std::min(val_max,std::max(val_min,val));
 }
 
 template<typename T> T sqr(T x)
@@ -327,7 +334,7 @@ template<typename T> void LogImpl(const char *file, int line, int level, const c
 		case LEVEL_DEBUG:	strLevel = "Debug:";	break;
 		case LEVEL_INFO:	strLevel = "Info:";		break;
 		case LEVEL_WARN:	strLevel = "WARNING:";	break;
-		default:			strLevel = "ERROR:";	break;
+		default:					strLevel = "ERROR:";	break;
 	}
 
 	std::ostringstream oss;

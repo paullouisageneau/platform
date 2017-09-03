@@ -3,7 +3,7 @@ CXX=g++
 RM=rm -f
 CPPFLAGS=-std=c++11 -g -O2
 LDFLAGS=-g
-LDLIBS=-lpthread -lGL -lGLEW -lSDL2 -lnettle -lhogweed -lgmp -lgnutls
+LDLIBS=-lpthread -lGL -lGLEW -lSDL2 -lnettle -lhogweed -lgmp -lgnutls -largon2
 
 SRCS=$(shell printf "%s " pla/*.cpp p3d/*.cpp demo/*.cpp)
 OBJS=$(subst .cpp,.o,$(SRCS))
